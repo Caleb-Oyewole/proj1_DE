@@ -5,7 +5,7 @@ import os
 
 INPUT_FILE = "raw_popular_movies.json"
 OUTPUT_FILE = "transformed_high_popularity_movies.csv"
-POPULARITY_THRESHOLD = 50 # Set the threshold for high popularity
+POPULARITY_THRESHOLD = 70 # Set the threshold for high popularity
 
 def transform_movie_data(input_file, output_file_csv, threshold):
     """Loads raw movie data, cleans, deduplicates, filters, and saves as CSV."""
