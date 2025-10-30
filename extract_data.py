@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-API_KEY = os.getenv("")
+API_KEY = os.getenv("TMDB_API_KEY")
 BASE_URL = "https://api.themoviedb.org/3/movie/popular"
 TARGET_FILE = "raw_popular_movies.json"
 PAGES_TO_FETCH = 5 # Fetch 5 pages of movies (100 records)
