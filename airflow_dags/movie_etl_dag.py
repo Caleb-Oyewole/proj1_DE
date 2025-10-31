@@ -1,43 +1,54 @@
 # airflow_dags/movie_etl_dag.py
 
 from airflow.models.dag import DAG
-from airflow.operators.bash import BashOperator
-from datetime import datetime
-from datetime import timedelta
+from airflow.providers.docker.operators.docker import DockerOperator
+from datetime import datetime, timedelta
 
-# Set the path to the directory containing your ETL scripts inside the Docker container
-# This path is mapped in docker-compose.yaml as the project root (.:/app/scripts)
-PYTHON_SCRIPT_DIR = "/app/scripts/"
-PYTHON_CMD = "python " + PYTHON_SCRIPT_DIR 
+# --- Configuration ---
+# The name of the custom image we built (movie-etl-worker:latest)
+WORKER_IMAGE = "movie-etl-worker:latest" 
+# The directory *inside the worker container* where the scripts are mounted
+SCRIPT_DIR = "/app/scripts/" 
+# The volume mount defined in docker-compose.yaml, needed for the DockerOperator
+HOST_VOLUME = "/usr/local/airflow/dags:/opt/airflow/dags" 
+# CRITICAL: This allows the worker to reach your local PostgreSQL server
+HOST_NETWORK = "host" 
 
 with DAG(
     dag_id="tmd_movie_etl_pipeline",
     start_date=datetime(2025, 1, 1),
-    schedule_interval=timedelta(hours=24), # Run once a day
+    schedule_interval=timedelta(hours=24),
     catchup=False,
     tags=["etl", "tmdb", "data-engineering"],
     default_args={
         "owner": "airflow",
-        "email_on_failure": False,
-        "email_on_retry": False,
         "retries": 1,
         "retry_delay": timedelta(minutes=5),
     }
 ) as dag:
     
-    extract_task = BashOperator(
+    extract_task = DockerOperator(
         task_id="extract_data_from_api",
-        bash_command=f"{PYTHON_CMD}extract_data.py", 
+        image=WORKER_IMAGE,
+        command=f"python {SCRIPT_DIR}extract_data.py", 
+        network_mode=HOST_NETWORK, # Allows reaching host.docker.internal
+        volumes=[f"./:/app/scripts"], # Mount the project directory to the container
     )
 
-    transform_task = BashOperator(
+    transform_task = DockerOperator(
         task_id="transform_data_filter_popularity",
-        bash_command=f"{PYTHON_CMD}transform_data.py",
+        image=WORKER_IMAGE,
+        command=f"python {SCRIPT_DIR}transform_data.py",
+        network_mode=HOST_NETWORK,
+        volumes=[f"./:/app/scripts"],
     )
     
-    load_task = BashOperator(
+    load_task = DockerOperator(
         task_id="load_data_to_postgres",
-        bash_command=f"{PYTHON_CMD}load_data.py",
+        image=WORKER_IMAGE,
+        command=f"python {SCRIPT_DIR}load_data.py",
+        network_mode=HOST_NETWORK,
+        volumes=[f"./:/app/scripts"],
     )
 
     # Define the execution order
