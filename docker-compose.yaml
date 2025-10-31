@@ -32,7 +32,7 @@ services:
     ports:
       - "8080:8080" # Access Airflow UI at http://localhost:8080
     environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       # Airflow metadata database is SQLite for simplicity
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
       - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-key
@@ -54,7 +54,7 @@ services:
     container_name: airflow_scheduler
     restart: always
     environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
     volumes:
       - ./airflow_dags:/opt/airflow/dags
