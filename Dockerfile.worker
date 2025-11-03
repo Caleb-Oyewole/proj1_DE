@@ -1,0 +1,16 @@
+# Dockerfile.worker
+# CRITICAL FIX: Use a stable and compatible Python version
+FROM python:3.8-slim
+
+# Set the working directory inside the container
+WORKDIR /app/scripts
+
+# Copy the dependencies file and install them
+# requirements.txt contains pandas, psycopg2-binary, requests, python-dotenv
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy all essential project files into the WORKDIR
+COPY extract_data.py transform_data.py load_data.py .env .
+
+# WORKDIR is /app/scripts
