@@ -2,19 +2,22 @@ version: '3.7'
 
 services:
   # ----------------------------------------------------------------------
-  # 0. PostgreSQL Database 
+  # 0. PostgreSQL Database (Airflow Metadata and ETL Target)
   # ----------------------------------------------------------------------
   postgres:
     image: postgres:13
     container_name: postgres_db
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=movie_etl_db
+      # Airflow requires its own user and database to manage metadata
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+      # ETL target database
+      - POSTGRES_MULTIPLE_DATABASES=movie_etl_db
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -23,6 +26,7 @@ services:
   # 1. ETL Worker Service (Builds the image used by DockerOperator)
   # ----------------------------------------------------------------------
   etl_worker:
+    # Build using the corrected Dockerfile.worker
     build: 
       context: . 
       dockerfile: Dockerfile.worker
@@ -31,7 +35,7 @@ services:
     env_file:
       - ./.env 
     environment:
-      # CRITICAL: Allows the worker to connect to the separate postgres container
+      # CRITICAL: Connect the ETL worker to the postgres service
       - DB_HOST=postgres 
     depends_on:
       - postgres
@@ -40,30 +44,26 @@ services:
   # 2. Airflow Webserver (UI)
   # ----------------------------------------------------------------------
   airflow_webserver:
-    image: apache/airflow:2.8.1-python3.8 # Use python 3.8 version for stability
+    image: apache/airflow:2.8.1-python3.8
     container_name: airflow_webserver
     restart: always
     ports:
       - "8080:8080"
     environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor # Using LocalExecutor is standard
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      # CRITICAL: Connect to the Airflow metadata database in the 'postgres' service
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
       - AIRFLOW__WEBSERVER__SECRET_KEY=super-secret-key 
     volumes:
       - ./airflow_dags:/opt/airflow/dags
-      - ./requirements_airflow.txt:/requirements_airflow.txt # Mount the provider list
+      - ./requirements_airflow.txt:/requirements_airflow.txt # For installing providers
       - airflow_data:/opt/airflow
-      - /var/run/docker.sock:/var/run/docker.sock 
-    # CRITICAL FIX: Install dependencies into the Airflow container on startup
-    entrypoint: [
-        "/bin/bash", 
-        "-c", 
-        "pip install --no-cache-dir -r /requirements_airflow.txt && exec /entrypoint.sh webserver"
-    ]
+      - /var/run/docker.sock:/var/run/docker.sock # Docker socket for DockerOperator
     depends_on:
       postgres:
-        condition: service_healthy # Wait for DB to be healthy
-  
+        condition: service_healthy
+    command: webserver # Use default command
+
   # ----------------------------------------------------------------------
   # 3. Airflow Scheduler
   # ----------------------------------------------------------------------
@@ -78,15 +78,11 @@ services:
       - ./airflow_dags:/opt/airflow/dags
       - ./requirements_airflow.txt:/requirements_airflow.txt
       - airflow_data:/opt/airflow
-      - /var/run/docker.sock:/var/run/docker.sock 
-    entrypoint: [
-        "/bin/bash", 
-        "-c", 
-        "pip install --no-cache-dir -r /requirements_airflow.txt && exec /entrypoint.sh scheduler"
-    ]
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       airflow_webserver:
         condition: service_started
+    command: scheduler # Use default command
 
 volumes:
   airflow_data:
